@@ -1,6 +1,7 @@
 import pool from "../../config/database.js";
 
 export default class Userstats {
+
     static async fetchUserStats() {
         // Call the stored procedure to get user stats
         const [rows] = await pool.query('CALL sp_public_user_stats()');
@@ -13,4 +14,12 @@ export default class Userstats {
             total_bookings: stats.total_bookings
         };
     }
+
+    static async fetchAllPublicUsersWithBookings() {
+        const [rows] = await pool.query('CALL sp_GetAllPublicUsersWithBookings()');
+        return rows[0];
+    }
+
+    
+
 }

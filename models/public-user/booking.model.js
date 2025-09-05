@@ -1,4 +1,7 @@
+import pool from "../../config/database.js";
+
 export default class Booking {
+
     static async createBooking({
         user_id,
         center_id,
@@ -24,6 +27,7 @@ export default class Booking {
             ]
         );
         // The output parameters are in the second result set
+        console.log("Create Booking Stored Procedure Result:", rows);
         const output = rows[1][0];
         return {
             errorCode: output.errorCode,
