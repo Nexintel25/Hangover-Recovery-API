@@ -1,11 +1,13 @@
-import jwt from 'jsonwebtoken';
+import JWT from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
+import VerifyModel from '../../models/auth/verify.model.js';
 
 dotenv.config();
 
 export const userVerifyController = async (req, res) => {
 
-    const { user_name, password, roleId } = req.body;
+    const { user_name, password, roleId, device_info, ip_address } = req.body;
 
     // Validate required fields
     if (!user_name && !roleId) {
@@ -23,39 +25,50 @@ export const userVerifyController = async (req, res) => {
 
     try {
 
-        const data = await getUser({
-            user_name,
-            email,
-        });
+        const data = await VerifyModel.verifyUser(user_name, roleId);
 
-        if (data.errorCode === 1) {
-            return res.status(404).json({
-                error: 'User not found.',
-                success: false
-            });
-        }
+        if (data.errorCode !== 0) {
 
-        // Compare password with hashed password
-        const isMatch = password === data.password;
-
-        if (!isMatch) {
             return res.status(401).json({
-                error: 'Invalid password.',
+                error: data.message,
                 success: false
             });
         }
 
-        // Generate JWT token
-        const token = jwt.sign(
-            { user_name: data.user_name, email: data.email, user_id: data.user_id },
+        if (!data.userInfo) {
+            return res.status(401).json({
+                error: 'Invalid credentials.',
+                success: false
+            });
+        }
+
+        const passwordMatch = await bcrypt.compare(password, data.userInfo.password_hash);
+
+        if (!passwordMatch) {
+            return res.status(401).json({
+                error: 'Invalid credentials.',
+                success: false
+            });
+        }
+
+        const access_token = JWT.sign(
+            { user_id: data.userInfo.user_id, role_id: data.userInfo.role_id },
             process.env.JWT_SECRET,
-            { expiresIn: process.env.JWT_EXPIRATION } // Token expiration time
+            { expiresIn: process.env.JWT_EXPIRATION_FOR_ACCESS_TOKEN } // Token expiration time
         );
 
-        const insertTokenRes = await insertToken({
-            user_name: data.user_name,
-            email: data.email,
-            token
+        const refresh_token = JWT.sign(
+            { user_id: data.userInfo.user_id, role_id: data.userInfo.role_id },
+            process.env.JWT_SECRET,
+            { expiresIn: process.env.JWT_EXPIRATION_FOR_REFRESH_TOKEN } // Token expiration time
+        );
+
+        const insertTokenRes = await VerifyModel.insertUserToken({
+            account_id: data.userInfo.account_id,
+            access_token,
+            refresh_token,
+            device_info: device_info || null,
+            ip_address: ip_address || null
         });
 
         if (insertTokenRes.errorCode !== 0) {
@@ -66,27 +79,32 @@ export const userVerifyController = async (req, res) => {
         }
 
         // Attach token to cookie and return response
-        res.cookie('token', token, {
+        res.cookie('token', access_token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'Strict',
+            sameSite: 'Strict' | 'Lax',
             maxAge: 1000 * 60 * 60 // 1 hour
         });
 
+        res.cookie('refresh_token', refresh_token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'Strict' | 'Lax',
+            maxAge: 1000 * 60 * 60 * 24 * 7 // 7 days or your preferred duration
+        });
+
+        const responseData = {
+            "account_id": data.userInfo.account_id,
+            "email": data.userInfo.email,
+            "mobile": data.userInfo.mobile,
+            "role_id": data.userInfo.role_id,
+            "status": data.userInfo.status
+        };
+
         return res.status(200).json({
-            message: 'Login successful.',
-            success: true,
-            token: token,
-            user: {
-                user_id: data.user_id,
-                user_name: data.user_name,
-                email: data.email,
-                roleId: data.roleId,
-                user_type: data.user_type,
-                assembly_id: data.assembly_id,
-                district_id: data.district_id,
-                state_id: data.state_id
-            }
+            message: data.message,
+            success: data.errorCode === 0,
+            user: responseData
         });
 
     } catch (err) {

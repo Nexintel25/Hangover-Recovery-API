@@ -1,15 +1,19 @@
 import NurseModel from '../../models/auth/nurse.model.js';
+import bcrypt from 'bcryptjs';
 
 export async function nurseRegisterController(req, res) {
     try {
         const {
-            email, mobile, passwordHash, fullName, licenseNumber, experienceYears, specialization,
+            email, mobile, password, fullName, licenseNumber, experienceYears, specialization,
             address, bankDetails, workingHours, geoArea, profilePic
         } = req.body;
 
-        if (!email || !mobile || !passwordHash || !fullName || !licenseNumber || !experienceYears || !specialization) {
-            return res.status(400).json({ error: 'Missing required fields: Email, Mobile, Password Hash, Full Name, License Number, Experience Years, Specialization' });
+        if (!email || !mobile || !password || !fullName || !licenseNumber || !experienceYears || !specialization) {
+            return res.status(400).json({ error: 'Missing required fields: Email, Mobile, Password, Full Name, License Number, Experience Years, Specialization' });
         }
+
+        // Hash the password
+        const passwordHash = await bcrypt.hash(password, 10);
 
         const result = await NurseModel.registerNurse(
             email, mobile, passwordHash, fullName, licenseNumber, experienceYears, specialization,

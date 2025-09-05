@@ -24,6 +24,7 @@ app.use('/api/admin', Routes.admin);
 app.use('/api/public', Routes.public);
 app.use('/api/center', Routes.center);
 app.use('/api/nurse', Routes.nurse);
+app.use('/api/auth', Routes.authentication);
 
 app.get('/', (req, res) => {
     res.send('Hello World!');
